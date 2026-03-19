@@ -1,0 +1,21 @@
+# Dataset (too large for git)
+*.zip
+ASVspoof2019/
+features/
+*.npz
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+venv/
+.env
