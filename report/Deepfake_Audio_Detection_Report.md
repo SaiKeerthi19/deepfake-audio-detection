@@ -341,7 +341,93 @@ Same comparison for SVM:
 
 ---
 
-## VIII. Discussion
+## VIII. Performance of Models
+
+### A. Training and Inference Time
+
+| Model | Training Time | Inference Time (71K eval) | Total Pipeline |
+|-------|--------------|--------------------------|----------------|
+| Logistic Regression | 0.3 seconds | < 1 second | ~0.5s |
+| SVM (RBF kernel) | 66 seconds | ~30 seconds | ~1.5 min |
+| CNN (50 epochs, MPS GPU) | ~15 minutes | ~30 seconds | ~16 min |
+| Wav2Vec2 + LR | ~1 second† | < 1 second | ~7 hours† |
+| Wav2Vec2 + SVM | ~30 minutes† | ~5 minutes | ~7.5 hours† |
+
+†Wav2Vec2 feature extraction is a one-time cost of ~7 hours. Once embeddings are extracted and saved, classifier training and inference on extracted features is fast.
+
+### B. Feature Extraction Benchmarks
+
+| Feature Type | Dimensions | Extraction Time (121K files) | Storage Size |
+|-------------|-----------|------------------------------|-------------|
+| MFCC + Spectral descriptors | 70 | ~20 minutes | ~50 MB |
+| Mel Spectrograms | 128 × 251 | ~20 minutes | ~8 GB |
+| Wav2Vec2 Embeddings | 768 | ~7 hours | ~700 MB |
+
+### C. Model Complexity
+
+| Model | Trainable Parameters | Feature Dimensionality | Training Samples |
+|-------|---------------------|----------------------|-----------------|
+| Logistic Regression | 71 (weights + bias) | 70 | 25,380 |
+| SVM (RBF) | ~5,000 support vectors | 70 | 25,380 |
+| CNN | **455,938** | 128 × 251 (32,128 per sample) | 25,380 |
+| Wav2Vec2 + LR | 769 (weights + bias) | 768 | 25,380 |
+| Wav2Vec2 + SVM | ~8,000 support vectors | 768 | 25,380 |
+| Wav2Vec2 (frozen backbone) | 95M (not trained) | raw audio → 768 | Pre-trained on 960h LibriSpeech |
+
+---
+
+## IX. Memory and Hardware Configuration
+
+### A. Hardware Used
+
+| Component | Specification |
+|-----------|--------------|
+| Processor | Apple M2 Pro (12-core CPU, 19-core GPU) |
+| Memory | 32 GB unified RAM |
+| GPU | MPS (Metal Performance Shaders) — used for CNN training |
+| Wav2Vec2 Inference | CPU (to preserve GPU memory for CNN) |
+| OS | macOS Sequoia |
+| Python | 3.9+ with PyTorch 2.0+ (MPS backend) |
+
+### B. Peak Memory Usage by Stage
+
+| Stage | Peak RAM | Compute Device | Notes |
+|-------|----------|---------------|-------|
+| Dataset loading (paths) | ~1 GB | CPU | 121,461 file path entries |
+| Feature extraction (MFCC + spectral) | **~28 GB** | CPU (12 cores) | Parallel processing of 121K .flac files |
+| Mel spectrogram extraction | **~28 GB** | CPU (12 cores) | 128×251 float arrays per file |
+| Feature save/load (.npz) | ~8 GB | Disk I/O | 3 compressed numpy archive files |
+| LR training | < 1 GB | CPU | 25,380 × 70 feature matrix |
+| SVM training | ~2 GB | CPU | RBF kernel matrix computation |
+| CNN training | ~4 GB | MPS GPU | Batch size 32, ~20s per epoch |
+| **Wav2Vec2 embedding extraction** | **~4 GB** | **CPU** | 12-layer transformer inference per file |
+| Wav2Vec2 + SVM training | ~3 GB | CPU | RBF kernel on 25,380 × 768 matrix |
+
+### C. Storage Requirements
+
+| Item | Size |
+|------|------|
+| ASVspoof 2019 LA dataset (zip) | ~5 GB |
+| Extracted audio files (.flac) | ~5 GB |
+| MFCC + spectral features (.npz) | ~50 MB |
+| Mel spectrogram features (.npz) | ~8 GB |
+| Wav2Vec2 embeddings (.npz) | ~700 MB |
+| CNN model weights (best_cnn.pth) | 1.7 MB |
+| **Total disk required** | **~20 GB** |
+
+### D. Minimum System Requirements
+
+| Resource | Minimum (with subsampling) | Recommended (full dataset) |
+|----------|--------------------------|---------------------------|
+| RAM | 16 GB | **32 GB** |
+| Disk space | 15 GB | 25 GB |
+| GPU | Not required (CPU works) | Apple MPS or NVIDIA CUDA |
+| CPU cores | 4 | 8+ |
+| Python | 3.9 | 3.10+ |
+
+---
+
+## X. Discussion
 
 ### A. Feature Quality vs. Classifier Complexity
 
@@ -361,7 +447,7 @@ The CNN's low overall accuracy (56.3%) despite high AUC (0.888) suggests a thres
 
 ---
 
-## IX. Team Contributions
+## XI. Team Contributions
 
 | Member | Role | Primary Contributions |
 |--------|------|----------------------|
@@ -381,7 +467,7 @@ The CNN's low overall accuracy (56.3%) despite high AUC (0.888) suggests a thres
 
 ---
 
-## X. Conclusion and Future Work
+## XII. Conclusion and Future Work
 
 This work demonstrates that transfer learning from self-supervised speech models (Wav2Vec2) provides dramatically superior deepfake detection compared to hand-crafted acoustic features and supervised deep learning on spectrograms. On the ASVspoof 2019 LA evaluation set with 13 unseen attack types, Wav2Vec2 + SVM achieves 96.3% accuracy with only 2,026 missed deepfakes out of 63,882, compared to 10,640 misses for the best MFCC-based model.
 
