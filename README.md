@@ -161,6 +161,94 @@ Run all cells. Expected execution time:
 
 ---
 
+## ⚡ Performance of Models
+
+### Training & Inference Time
+
+| Model | Training Time | Inference Time (71K eval) | Total Pipeline |
+|-------|--------------|--------------------------|----------------|
+| Logistic Regression | 0.3 seconds | < 1 second | ~0.5s |
+| SVM (RBF kernel) | 66 seconds | ~30 seconds | ~1.5 min |
+| CNN (50 epochs, MPS) | ~15 minutes | ~30 seconds | ~16 min |
+| Wav2Vec2 + LR | ~1 second* | < 1 second | ~7 hours* |
+| Wav2Vec2 + SVM | ~30 minutes* | ~5 minutes | ~7.5 hours* |
+
+*\*Wav2Vec2 feature extraction takes ~7 hours (one-time cost). Training/inference on extracted features is fast.*
+
+### Feature Extraction Time
+
+| Feature Type | Dimensions | Extraction Time (121K files) | Storage |
+|-------------|-----------|------------------------------|---------|
+| MFCC + Spectral | 70 | ~20 minutes | ~50 MB |
+| Mel Spectrograms | 128 × 251 | ~20 minutes | ~8 GB |
+| Wav2Vec2 Embeddings | 768 | ~7 hours | ~700 MB |
+
+### Model Complexity
+
+| Model | Parameters | Feature Dim | Training Samples |
+|-------|-----------|-------------|-----------------|
+| Logistic Regression | 71 weights + bias | 70 | 25,380 |
+| SVM (RBF) | ~5,000 support vectors | 70 | 25,380 |
+| CNN | **455,938** | 128 × 251 | 25,380 |
+| Wav2Vec2 + LR | 769 weights + bias | 768 | 25,380 |
+| Wav2Vec2 + SVM | ~8,000 support vectors | 768 | 25,380 |
+| Wav2Vec2 (frozen) | 95M (not trained) | raw audio | pre-trained |
+
+---
+
+## 💻 Memory & Hardware Configuration
+
+### Hardware Used
+
+| Component | Specification |
+|-----------|--------------|
+| **Processor** | Apple M2 Pro (12-core CPU, 19-core GPU) |
+| **Memory** | 32 GB unified RAM |
+| **GPU** | MPS (Metal Performance Shaders) — CNN training |
+| **OS** | macOS Sequoia |
+| **Python** | 3.9+ |
+| **PyTorch** | 2.0+ with MPS backend |
+
+### Peak Memory Usage by Stage
+
+| Stage | RAM Usage | Compute Device | Notes |
+|-------|-----------|---------------|-------|
+| Dataset loading | ~1 GB | CPU | 121,461 file paths |
+| Feature extraction (MFCC) | **~28 GB peak** | CPU (12 cores) | Parallel processing of 121K .flac files |
+| Mel spectrogram extraction | **~28 GB peak** | CPU (12 cores) | 128×251 arrays for each file |
+| Feature save/load (.npz) | ~8 GB | Disk I/O | 3 compressed numpy files |
+| LR training | < 1 GB | CPU | 25,380 × 70 matrix |
+| SVM training | ~2 GB | CPU | Kernel matrix computation |
+| CNN training | ~4 GB | MPS GPU | Batch size 32, ~20s/epoch |
+| **Wav2Vec2 extraction** | **~4 GB** | **CPU** | 12-layer transformer per file |
+| W2V + SVM training | ~3 GB | CPU | 25,380 × 768 kernel matrix |
+
+### Storage Requirements
+
+| Item | Size |
+|------|------|
+| ASVspoof 2019 LA dataset (zip) | ~5 GB |
+| Extracted audio files (.flac) | ~5 GB |
+| MFCC + spectral features (.npz) | ~50 MB |
+| Mel spectrogram features (.npz) | ~8 GB |
+| Wav2Vec2 embeddings (.npz) | ~700 MB |
+| CNN model weights (.pth) | 1.7 MB |
+| **Total disk needed** | **~20 GB** |
+
+### Minimum Requirements
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| RAM | 16 GB (with subsampling) | **32 GB** |
+| Disk | 15 GB | 25 GB |
+| GPU | Not required (CPU works) | Apple MPS or CUDA |
+| CPU cores | 4 | 8+ |
+| Python | 3.9 | 3.10+ |
+
+> **💡 Tip:** Set `MAX_N = 5000` in the notebook to run a quick test with reduced data (~10 min total instead of 8.5 hours).
+
+---
+
 ## 📈 Per-Attack Results
 
 | Attack | LR EER | SVM EER | CNN EER | W2V+LR EER | Difficulty |
